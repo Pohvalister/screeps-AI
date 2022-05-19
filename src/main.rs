@@ -55,7 +55,7 @@ fn game_loop() {
                 let res = spawn.spawn_creep(&body, &name);
 
                 match screeps::game::creeps::get(&name) {
-                    Some(creep) => creep.memory().set("activity", Task::Conquer.to_int()),
+                    Some(creep) => creep.memory().set("activity", Task::Build.to_int()),
                     None => (),
                 }
                 if res == ReturnCode::NameExists {
