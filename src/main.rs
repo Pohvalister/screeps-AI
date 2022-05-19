@@ -1,12 +1,19 @@
-use std::collections::HashSet;
+use crate::creeptasks::{start_working, Task};
 
 use log::*;
-use screeps::{find, prelude::*, Part, ResourceType, ReturnCode, RoomObjectProperties};
+use screeps::{prelude::*, Part, ReturnCode};
+use std::collections::HashSet;
 use stdweb::js;
 
 mod logging;
 
+mod creeptasks;
+
+//extern crate console_error_panic_hook;
+
 fn main() {
+    //console_error_panic_hook::set_once();
+
     logging::setup_logging(logging::Info);
 
     js! {
@@ -47,6 +54,10 @@ fn game_loop() {
                 let name = format!("{}-{}", name_base, additional);
                 let res = spawn.spawn_creep(&body, &name);
 
+                match screeps::game::creeps::get(&name) {
+                    Some(creep) => creep.memory().set("activity", Task::Conquer.to_int()),
+                    None => (),
+                }
                 if res == ReturnCode::NameExists {
                     additional += 1;
                 } else {
@@ -68,9 +79,44 @@ fn game_loop() {
             continue;
         }
 
-        if creep.memory().bool("harvesting") {
+        start_working(creep);
+    }
+
+    let time = screeps::game::time();
+
+    if time % 32 == 3 {
+        info!("running memory cleanup");
+        cleanup_memory().expect("expected Memory.creeps format to be a regular memory object");
+    }
+
+    info!("done! cpu: {}", screeps::game::cpu::get_used());
+}
+
+fn cleanup_memory() -> Result<(), Box<dyn std::error::Error>> {
+    let alive_creeps: HashSet<String> = screeps::game::creeps::keys().into_iter().collect();
+
+    let screeps_memory = match screeps::memory::root().dict("creeps")? {
+        Some(v) => v,
+        None => {
+            warn!("not cleaning game creep memory: no Memory.creeps dict");
+            return Ok(());
+        }
+    };
+
+    for mem_name in screeps_memory.keys() {
+        if !alive_creeps.contains(&mem_name) {
+            debug!("cleaning up creep memory of dead creep {}", mem_name);
+            screeps_memory.del(&mem_name);
+        }
+    }
+
+    Ok(())
+}
+
+/*
+if creep.memory().bool("harvesting") {
             if creep.store_free_capacity(Some(ResourceType::Energy)) == 0 {
-                creep.memory().set("harvesting", false);
+                creep.memory().set("harvesting", false); //screeps::memory::MemoryRefernce
             }
         } else {
             if creep.store_used_capacity(None) == 0 {
@@ -107,35 +153,4 @@ fn game_loop() {
                 warn!("creep room has no controller!");
             }
         }
-    }
-
-    let time = screeps::game::time();
-
-    if time % 32 == 3 {
-        info!("running memory cleanup");
-        cleanup_memory().expect("expected Memory.creeps format to be a regular memory object");
-    }
-
-    info!("done! cpu: {}", screeps::game::cpu::get_used())
-}
-
-fn cleanup_memory() -> Result<(), Box<dyn std::error::Error>> {
-    let alive_creeps: HashSet<String> = screeps::game::creeps::keys().into_iter().collect();
-
-    let screeps_memory = match screeps::memory::root().dict("creeps")? {
-        Some(v) => v,
-        None => {
-            warn!("not cleaning game creep memory: no Memory.creeps dict");
-            return Ok(());
-        }
-    };
-
-    for mem_name in screeps_memory.keys() {
-        if !alive_creeps.contains(&mem_name) {
-            debug!("cleaning up creep memory of dead creep {}", mem_name);
-            screeps_memory.del(&mem_name);
-        }
-    }
-
-    Ok(())
-}
+        */
